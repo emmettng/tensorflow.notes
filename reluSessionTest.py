@@ -47,6 +47,13 @@ def main():
     testGraph = tf.Graph()
     testGraph2 = tf.Graph()
 
+    with testGraph2.as_default():
+        x = tf.placeholder(tf.float32, shape=[None,1])
+        testGloss = oneHiddenLayerNet(10,tf.nn.leaky_relu,x,Y)
+        optimizer = tf.train.GradientDescentOptimizer(0.001)
+        train_relu = optimizer.minimize(testGloss)
+        init = tf.global_variables_initializer()
+
     with testGraph.as_default():
         x = tf.placeholder(tf.float32, shape=[None,1])
         testGloss = oneHiddenLayerNet(10,tf.nn.leaky_relu,x,Y)
@@ -54,12 +61,7 @@ def main():
         train_relu = optimizer.minimize(testGloss)
         init = tf.global_variables_initializer()
 
-    with testGraph2.as_default():
-        x = tf.placeholder(tf.float32, shape=[None,1])
-        testGloss = oneHiddenLayerNet(10,tf.nn.leaky_relu,x,Y)
-        optimizer = tf.train.GradientDescentOptimizer(0.001)
-        train_relu = optimizer.minimize(testGloss)
-        init = tf.global_variables_initializer()
+
 
     writer = tf.summary.FileWriter('./event_log')
     writer.add_graph(testGraph)
