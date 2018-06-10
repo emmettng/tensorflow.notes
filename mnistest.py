@@ -41,6 +41,8 @@ def main(_):
     # Import data
     mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
     print ("")
+
+    # get data and training related information
     inDim = len(mnist.train.images[0])
     outDim = len(mnist.train.labels[0])
 
@@ -58,10 +60,13 @@ def main(_):
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     sess = tf.Session(graph=mg)
-    sess.run(init)
+##    sess.run(init)
+    init.run(session = sess)
     for _ in range(1000):
         batch_xs, batch_ys = mnist.train.next_batch(100)
-        sess.run(train_softMax, feed_dict={x: batch_xs, y_: batch_ys})
+#       sess.run(train_softMax, feed_dict={x: batch_xs, y_: batch_ys})
+        train_softMax.run(feed_dict={x: batch_xs, y_: batch_ys},session = sess)
+
 
     acc = sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels})
     print (acc)
@@ -69,7 +74,7 @@ def main(_):
     -- Check Graph and Session part of tutorial
     -- Need to focus on how to visually the training result,
     receptive field, weight changesself.
-    -- Finish the convolution part tutorial. 
+    -- Finish the convolution part tutorial.
     -- Convert mnist dataset to png image and process my solution
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
