@@ -71,11 +71,11 @@ def main(_):
     acc = sess.run(accuracy, feed_dict={x: mnist.test.images, y_: mnist.test.labels})
     print (acc)
 
-    -- Check Graph and Session part of tutorial
-    -- Need to focus on how to visually the training result,
-    receptive field, weight changesself.
-    -- Finish the convolution part tutorial.
-    -- Convert mnist dataset to png image and process my solution
+##    -- Check Graph and Session part of tutorial
+##    -- Need to focus on how to visually the training result,
+##    receptive field, weight changesself.
+##    -- Finish the convolution part tutorial.
+##    -- Convert mnist dataset to png image and process my solution
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='/tmp/tensorflow/mnist/input_data',

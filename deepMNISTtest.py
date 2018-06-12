@@ -6,12 +6,13 @@ import argparse
 import sys
 
 from tensorflow.examples.tutorials.mnist import input_data
+from dataset import *
 
 FLAGS = None
 
-def weightVariable(shape):
+def weightVariable(name,shape):
     initial = tf.truncated_normal(shape,stddev=0.1)
-    return tf.Variable(initial)
+    return tf.get_variable(name,initializer = initial)
 
 def biasVariable(shape):
     initial = tf.constant(0.1, shape=shape)
@@ -23,6 +24,17 @@ def conv2d(x,W):
 def pool2d(x):
     return tf.nn.max_pool(x,ksize = [1,2,2,1],strides=[1,2,2,1],padding='SAME')
     ## what is the SAME means here ? ?
+
+def conv_relu(input,kernel_shape,bias_shape):
+    kernel_init = tf.truncated_normal(kernel_shape,stddev=0.1)
+    W = tf.get_variable('conv_kernel',initializer=kernel_init)
+    bias_init = tf.constant(0.1,shape=bias_shape)
+    b = tf.get_variable('conv_b',initializer = bias_init)
+    conv = tf.nn.conv2d(input,W,strides=[1,1,1,1],padding='SAME')
+    h = tf.nn.relu(conv+b)
+    return h
+
+
 '''
  def_GRAPH
  Input :
@@ -37,7 +49,7 @@ def def_GRAPH(x):
         x_2d_images = tf.reshape(x,[-1,28,28,1])
 
     with tf.name_scope('conv1'):
-        W_conv1 = weightVariable([5,5,1,32])
+        W_conv1 = weightVariable('conv1',[5,5,1,32])
         b_conv1 = biasVariable([32])
         h_conv1 = tf.nn.relu(conv2d(x_2d_images,W_conv1)+b_conv1)
 
@@ -45,7 +57,7 @@ def def_GRAPH(x):
         h_pool1 = pool2d(h_conv1)
 
     with tf.name_scope('conv2'):
-        W_conv2 = weightVariable([5,5,32,64])
+        W_conv2 = weightVariable('conv2',[5,5,32,64])
         b_conv2 = biasVariable([64])
         h_conv2 = tf.nn.relu(conv2d(h_pool1,W_conv2)+b_conv2)
 
@@ -53,7 +65,7 @@ def def_GRAPH(x):
         h_pool2 = pool2d(h_conv2)
 
     with tf.name_scope('fc1'):
-        W_fc1 = weightVariable([7*7*64,1024])
+        W_fc1 = weightVariable('fc1',[7*7*64,1024])
         b_fc1 = biasVariable([1024])
 
         h_pool2_flatten = tf.reshape(h_pool2,[-1,7*7*64])
@@ -64,7 +76,7 @@ def def_GRAPH(x):
         h_fc1_drop = tf.nn.dropout(h_fc1,keep_prob)
 
     with tf.name_scope('fc2'):
-        W_fc2 = weightVariable([1024,10])
+        W_fc2 = weightVariable('fc2',[1024,10])
         b_fc2 = biasVariable([10])
         y_conv = tf.nn.relu(tf.matmul(h_fc1_drop,W_fc2)+b_fc2)
 
@@ -108,6 +120,10 @@ def main(_):
         ## regiester all variable for initilization
         graph_varialbe_init= tf.global_variables_initializer()
 
+        for v in tf.global_variables():
+            print (v)
+            print (v.name)
+
     ## tensorboard
     tensorboard_writer= tf.summary.FileWriter("./event_log")
     tensorboard_writer.add_graph(mg)
@@ -129,10 +145,14 @@ def main(_):
     print ("Training finished!")
     print ("test accuracy is %g" % test_accuracy)
 
+    print (type(accuracy))
+    print (type(training_handle))
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='/tmp/tensorflow/mnist/input_data',
+    parser.add_argument('--data_dir', type=str, default='./mnist',
                         help='Directory for storing input data')
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
