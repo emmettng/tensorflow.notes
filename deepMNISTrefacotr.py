@@ -154,7 +154,7 @@ def main(_):
 
         ## define optimizer
 ##        optimizer = tf.train.AdamOptimizer(1e-4)
-        optimizer = tf.train.AdagradOptimizer(0.01)
+        optimizer = tf.train.AdagradOptimizer(0.1)
 
         ## define training_handle
         training_handle = optimizer.minimize(loss)
