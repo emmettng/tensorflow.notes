@@ -200,7 +200,7 @@ def main(_):
         # perform *synchronous* training.
         # mon_sess.run handles AbortedError in case of preempted PS.
         batch_xs, batch_ys = mnist.train.next_batch(50)
-        mon_sess.run(train_op],feed_dict={y_:batch_xs})
+        mon_sess.run(train_op,feed_dict={y_:batch_xs})
         cnt+=1
         if cnt % 100 ==0:
             tloss = mon_sess.run(loss,feed_dict={y_:batch_xs})
