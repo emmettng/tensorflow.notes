@@ -244,5 +244,11 @@ if __name__ == "__main__":
       type=str,
       default = './event_log',
       help='Summaries log directory')
+  
+  parser.add_argument(
+      '--data_dir',
+      type=str,
+      default='./mnist',
+      help='Directory for storing input data')
   FLAGS, unparsed = parser.parse_known_args()
   tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
