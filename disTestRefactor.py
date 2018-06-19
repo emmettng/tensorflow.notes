@@ -159,10 +159,10 @@ def def_ComposeGraph():
         ps_hosts = FLAGS.ps_hosts.split(',')
         worker_hosts = FLAGS.worker_hosts.split(',')
         cluster = tf.train.ClusterSpec({"ps": ps_hosts, "worker": worker_hosts})
-
         device_setter = tf.train.replica_device_setter(
             worker_device="/job:worker/task:%d" % FLAGS.task_id,
             cluster=cluster)
+        global_step = tf.contrib.framework.get_or_create_global_step()
     else:
         device_setter = "/cpu:0"
 
@@ -174,8 +174,12 @@ def def_ComposeGraph():
         loss = def_LOSS(y_,y_Hypo)
         ## define optimizer
         optimizer = tf.train.AdamOptimizer(1e-4)
+
         ## define training_handle
-        training_handle = optimizer.minimize(loss)
+        if FLAGS.distribute == 'distribute':
+            training_handle = optimizer.minimize(loss,global_step = global_step)
+        else:
+            training_handle = optimizer.minimize(loss)
         ## accuracy definition
 ##           accuracy = def_ACCURACY(y_Hypo=y_Hypo, y_=y_)
         ## regiester all variable for initilization in this graph
