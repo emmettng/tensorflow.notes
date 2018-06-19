@@ -194,7 +194,9 @@ def main(_):
                                            is_chief=(FLAGS.task_index == 0),
                                            checkpoint_dir=FLAGS.log_dir,
                                            hooks=hooks) as mon_sess:
+      print ("start in the session")
       while not mon_sess.should_stop():
+        print ("start in training loop")
         # Run a training step asynchronously.
         # See <a href="../api_docs/python/tf/train/SyncReplicasOptimizer"><code>tf.train.SyncReplicasOptimizer</code></a> for additional details on how to
         # perform *synchronous* training.
@@ -202,11 +204,13 @@ def main(_):
         batch_xs, batch_ys = mnist.train.next_batch(50)
         mon_sess.run(train_op,feed_dict={y_:batch_xs})
         cnt+=1
-        if cnt % 100 ==0:
+        if cnt % 10 ==0:
+            print ("the loss is")
             tloss = mon_sess.run(loss,feed_dict={y_:batch_xs})
-            summary = sess.run(merged_summary,feed_dict={y_:batch_xs})
+            summary = mon_sess.run(merged_summary,feed_dict={y_:batch_xs})
             training_summary.add_summary(summary,cnt)
-            print ("loss %d , in training loop %g", (tloss,cnt))
+            print ("loss %d , in training loop %g" % (tloss,cnt))
+      print ("training finished")
 
     training_summary.close()
 
