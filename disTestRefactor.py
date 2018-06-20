@@ -144,11 +144,12 @@ def def_Dis_Session():
     server = tf.train.Server(cluster,
                            job_name=FLAGS.job_name,
                            task_index=FLAGS.task_index)
+    global_step = tf.contrib.framework.get_or_create_global_step()
+
     sess = tf.train.MonitoredTrainingSession(master=server.target,
                                            is_chief=(FLAGS.task_index == 0),
                                            checkpoint_dir=FLAGS.log_dir,
                                            hooks=hooks)
-    global_step = tf.contrib.framework.get_or_create_global_step()
 
     return (server,sess,global_step)
 
