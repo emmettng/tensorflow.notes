@@ -170,6 +170,7 @@ def def_ComposeGraph():
         cluster = tf.train.ClusterSpec({"ps": ps_hosts, "worker": worker_hosts})
         device_setter = tf.train.replica_device_setter(
             worker_device="/job:worker/task:%d" % FLAGS.task_id,
+            ps_device="/job:ps",
             cluster=cluster)
         ## global_step is also a tensor
         global_step = tf.contrib.framework.get_or_create_global_step()
@@ -299,11 +300,15 @@ def train_boday():
     training_handles = [train_op,y_,loss,graph_varialbe_init,merged_summary]
 
     if FLAGS.distribute == 'distribute' and FLAGS.job_name == 'ps':
+        with tf.device("/cpu:0"):
             server.join()
-    elif FLAGS.distribute == 'distribute' and FLAGS.job_name == 'worker':
-        run_my_model_mon(mnist,training_handles,sess,training_summary)
     else:
         run_my_model_mon(mnist,training_handles,sess,training_summary)
+
+##    elif FLAGS.distribute == 'distribute' and FLAGS.job_name == 'worker':
+##        run_my_model_mon(mnist,training_handles,sess,training_summary)
+##    else:
+##        run_my_model_mon(mnist,training_handles,sess,training_summary)
 
     print ("training finished")
     ## release all resources
