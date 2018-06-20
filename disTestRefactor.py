@@ -148,13 +148,15 @@ def def_Dis_Session():
                                            is_chief=(FLAGS.task_index == 0),
                                            checkpoint_dir=FLAGS.log_dir,
                                            hooks=hooks)
-    return (server,sess)
+    global_step = tf.contrib.framework.get_or_create_global_step()
+
+    return (server,sess,global_step)
 
 def def_Local_Session():
     sess = tf.Session()
     return sess
 
-def def_ComposeGraph():
+def def_ComposeGraph(global_step):
     if FLAGS.distribute == 'distribute':
         ps_hosts = FLAGS.ps_hosts.split(',')
         worker_hosts = FLAGS.worker_hosts.split(',')
@@ -162,7 +164,6 @@ def def_ComposeGraph():
         device_setter = tf.train.replica_device_setter(
             worker_device="/job:worker/task:%d" % FLAGS.task_id,
             cluster=cluster)
-        global_step = tf.contrib.framework.get_or_create_global_step()
     else:
         device_setter = "/cpu:0"
 
@@ -215,7 +216,7 @@ def train_boday():
     ## define session
     with mg.as_default():
         if FLAGS.distribute == 'distribute':
-            server, sess = def_Dis_Session()
+            server, sess,global_step = def_Dis_Session()
         else:
             sess = def_Local_Session()
 
@@ -231,7 +232,7 @@ def train_boday():
                 training_handle,
                 graph_varialbe_init,
                 merged_summary
-                ) = def_ComposeGraph()
+                ) = def_ComposeGraph(global_step)
 
                 ## The following loop must be in the mg.as_default scope so globa_variables will contains all variables.
             for v in tf.global_variables():
