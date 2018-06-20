@@ -130,36 +130,36 @@ def def_ACCURACY(y_Hypo, y_):
             tf.summary.scalar('accuracy',accuracy)
     return accuracy
 
-def def_Dis_Session():
+def def_Dis_Server():
     ps_hosts = FLAGS.ps_hosts.split(",")
     worker_hosts = FLAGS.worker_hosts.split(",")
 
     # Create a cluster from the parameter server and worker hosts.
     cluster = tf.train.ClusterSpec({"ps": ps_hosts, "worker": worker_hosts})
 
-    # The StopAtStepHook handles stopping after running given steps.
-    hooks=[tf.train.StopAtStepHook(last_step=1000000)]
-
     # Create and start a server for the local task.
     server = tf.train.Server(cluster,
                            job_name=FLAGS.job_name,
                            task_index=FLAGS.task_index)
+    return server
+
+def def_Mon_Session(server):
+    # The StopAtStepHook handles stopping after running given steps.
+    hooks=[tf.train.StopAtStepHook(last_step=1000000)]
+
 ##    this order cannot be changed !!!! be aware ! what a crap api design !!!
 ##  Define the Session
-    global_step = tf.contrib.framework.get_or_create_global_step()
-
     sess = tf.train.MonitoredTrainingSession(master=server.target,
                                            is_chief=(FLAGS.task_index == 0),
                                            checkpoint_dir=FLAGS.log_dir,
                                            hooks=hooks)
-
-    return (server,sess,global_step)
+    return sess
 
 def def_Local_Session():
     sess = tf.Session()
     return sess
 
-def def_ComposeGraph(global_step):
+def def_ComposeGraph():
     if FLAGS.distribute == 'distribute':
         ps_hosts = FLAGS.ps_hosts.split(',')
         worker_hosts = FLAGS.worker_hosts.split(',')
@@ -167,23 +167,26 @@ def def_ComposeGraph(global_step):
         device_setter = tf.train.replica_device_setter(
             worker_device="/job:worker/task:%d" % FLAGS.task_id,
             cluster=cluster)
+        ## global_step is also a tensor
+        global_step = tf.contrib.framework.get_or_create_global_step()
     else:
         device_setter = "/cpu:0"
 
     with tf.device(device_setter):
+        ## y_, y_Hypo, loss, merged_summary are four tensors.
         y_ = tf.placeholder(dtype=tf.float32, shape = [None,784])
-        ## compose Graph
+        ## Define Graph
         y_Hypo = def_GRAPH(y_)
         ## get loss definition
         loss = def_LOSS(y_,y_Hypo)
         ## define optimizer
         optimizer = tf.train.AdamOptimizer(1e-4)
 
-        ## define training_handle
+        ## define train_operation
         if FLAGS.distribute == 'distribute':
-            training_handle = optimizer.minimize(loss,global_step = global_step)
+            training_op= optimizer.minimize(loss,global_step = global_step)
         else:
-            training_handle = optimizer.minimize(loss)
+            training_op= optimizer.minimize(loss)
         ## accuracy definition
 ##           accuracy = def_ACCURACY(y_Hypo=y_Hypo, y_=y_)
         ## regiester all variable for initilization in this graph
@@ -192,7 +195,7 @@ def def_ComposeGraph(global_step):
         ## merge all summary tensor in this graph.
         merged_summary = tf.summary.merge_all()
 
-    return ([],y_,y_Hypo,loss,training_handle,graph_varialbe_init,merged_summary)
+    return ([],y_,y_Hypo,loss,training_op,graph_varialbe_init,merged_summary)
 
 '''
 main:   compose all necessary functions together!
@@ -216,70 +219,95 @@ def train_boday():
     ## define the Computational Graph
     mg = tf.Graph()
 
-    ## define session
+##context manager is key here !!!
     with mg.as_default():
+        (
+            clist,
+            y_,
+            y_Hypo,
+            loss,
+            train_op,
+            graph_varialbe_init,
+            merged_summary
+        ) = def_ComposeGraph()
+
+## Session shall not be defined before this graph
+## in other words, more specifically, MonitoredTrainingSession can only be defined in the
+## scope of a graph at last.
         if FLAGS.distribute == 'distribute':
-            server, sess,global_step = def_Dis_Session()
+            server = def_Dis_Server()
+            sess = def_Mon_Session(server)
         else:
             sess = def_Local_Session()
 
-    if FLAGS.job_name == 'ps':
-        server.join()
-    else:
-        with mg.as_default():
-            (
-                clist,
-                y_,
-                y_Hypo,
-                loss,
-                training_handle,
-                graph_varialbe_init,
-                merged_summary
-                ) = def_ComposeGraph(global_step)
+        if FLAGS.distribute == 'distribute' and FLAGS.job_name == 'ps':
+            server.join()
 
-                ## The following loop must be in the mg.as_default scope so globa_variables will contains all variables.
-            for v in tf.global_variables():
-                print (v)
-                print (v.name)
+        ## The following loop must be in the mg.as_default scope so globa_variables will contains all variables.
+        for v in tf.global_variables():
+            print (v)
+            print (v.name)
 
-            ## define summary log directory.
+        ## define summary log directory.
         training_summary= tf.summary.FileWriter(FLAGS.log_dir + '/train')
- ##                   testing_summary = tf.summary.FileWriter(FLAGS.log_dir + '/test')
+##      testing_summary = tf.summary.FileWriter(FLAGS.log_dir + '/test')
 
         training_summary.add_graph(mg)
 
+    training_handles = [train_op,y_,loss,graph_varialbe_init,merged_summary]
+    if FLAGS.distribute == 'distribute':
+        run_my_model_mon(mnist,training_handles,sess,training_summary)
+    else:
+        run_my_model_sess(mnist,training_handles,sess,training_summary)
 
-        sess.run(graph_varialbe_init)
-
-        ## compose training loop
-        training_ROUND = 1000000
-        cnt = training_ROUND
-
-        with sess.as_default():
-            while not sess.should_stop():
-                batch_xs, batch_ys = mnist.train.next_batch(50)
-                mon_sess.run(train_op,feed_dict={y_:batch_xs})
-                cnt+=1
-                if cnt % 10 ==0:
-                    print ("the loss is")
-                    tloss = sess.run(loss,feed_dict={y_:batch_xs})
-                    summary = sess.run(merged_summary,feed_dict={y_:batch_xs})
-                    training_summary.add_summary(summary,cnt)
-                    print ("loss %d , in training loop %g" % (tloss,cnt))
-##        for i in range(training_ROUND):
-##            batch_xs, batch_ys = mnist.train.next_batch(50)
-##            ## need to specify Session instance explicitly
-##            training_handle.run(feed_dict={y_:batch_xs},session = sess)
-##
-##            if i % 100 == 0 and SUMMARY:
-##                cost = loss.eval(feed_dict={y_:batch_xs},session = sess)
-##                summary = sess.run(merged_summary,feed_dict={y_:batch_xs})
-##                training_summary.add_summary(summary,i)
-##                print ("step %d, training cost is: %g" % (i,cost))
-
+    print ("training finished")
     ## release all resources
     sess.close()
     training_summary.close()
+
+def run_my_model_mon(dataIterator,training_handles,mon_sess,training_summary):
+    [train_op,y_,loss,graph_varialbe_init,merged_summary] = training_handle
+
+    with mon_sess.as_default():
+        while not mon_sess.should_stop():
+            print ("start in training loop")
+# Run a training step asynchronously.
+# See <a href="../api_docs/python/tf/train/SyncReplicasOptimizer"><code>tf.train.SyncReplicasOptimizer</code></a> for additional details on how to
+# perform *synchronous* training.
+# mon_sess.run handles AbortedError in case of preempted PS.
+            batch_xs, batch_ys = dataIterator.train.next_batch(50)
+            batch_test_xs,batch_test_ys = dataIterator.test.next_batch(100)
+            mon_sess.run(train_op,feed_dict={y_:batch_xs})
+            cnt+=1
+            if cnt % 10 ==0:
+                print ("the loss is")
+                tloss = mon_sess.run(loss,feed_dict={y_:batch_test_xs})
+                summary = mon_sess.run(merged_summary,feed_dict={y_:batch_test_xs})
+                training_summary.add_summary(summary,cnt)
+                print ("loss %d , in training loop %g" % (tloss,cnt))
+
+def run_my_model_sess(dataIterator,training_handle,sess,training_summary):
+    training_ROUND = 1000000
+    cnt = training_ROUND
+
+    [train_op,y_,loss,graph_varialbe_init,merged_summary] = training_handle
+
+    ## need to initilize in sess
+    sess.run(graph_varialbe_init)
+
+    for i in range(training_ROUND):
+        batch_xs, batch_ys = dataIterator.train.next_batch(50)
+        batch_test_xs,batch_test_ys = dataIterator.test.next_batch(100)
+        ## need to specify Session instance explicitly
+        train_op.run(feed_dict={y_:batch_xs},session = sess)
+
+        if i % 100 == 0 and SUMMARY:
+            cost = loss.eval(feed_dict={y_:batch_test_xs},session = sess)
+            summary = sess.run(merged_summary,feed_dict={y_:batch_test_xs})
+            training_summary.add_summary(summary,i)
+            print ("step %d, training cost is: %g" % (i,cost))
+
+
 
 def main(_):
     train_boday()
