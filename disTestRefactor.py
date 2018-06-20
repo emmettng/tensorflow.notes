@@ -143,16 +143,20 @@ def def_Dis_Server():
                            task_index=FLAGS.task_index)
     return server
 
-def def_Mon_Session(server):
+def def_Mon_Session(server=None):
     # The StopAtStepHook handles stopping after running given steps.
     hooks=[tf.train.StopAtStepHook(last_step=1000000)]
 
 ##    this order cannot be changed !!!! be aware ! what a crap api design !!!
 ##  Define the Session
-    sess = tf.train.MonitoredTrainingSession(master=server.target,
-                                           is_chief=(FLAGS.task_index == 0),
-                                           checkpoint_dir=FLAGS.log_dir,
-                                           hooks=hooks)
+    if server is None:
+        sess = tf.train.MonitoredTrainingSession()
+    else:
+        sess = tf.train.MonitoredTrainingSession(
+                    master=server.target,
+                    is_chief=(FLAGS.task_index == 0),
+                    checkpoint_dir=FLAGS.log_dir,
+                    hooks=hooks)
     return sess
 
 def def_Local_Session():
@@ -197,6 +201,46 @@ def def_ComposeGraph():
 
     return ([],y_,y_Hypo,loss,training_op,graph_varialbe_init,merged_summary)
 
+def run_my_model_mon(dataIterator,training_handle,mon_sess,training_summary):
+    [train_op,y_,loss,graph_varialbe_init,merged_summary] = training_handle
+    print ("start in monitored running")
+    cnt = 0
+    while not mon_sess.should_stop():
+# Run atraining step asynchronously.
+# See < href="../api_docs/python/tf/train/SyncReplicasOptimizer"><code>tf.train.SyncReplicasOptimizer</code></a> for additional details on how to
+# perfom *synchronous* training.
+# mon_sss.run handles AbortedError in case of preempted PS.
+        batch_xs, batch_ys = dataIterator.train.next_batch(50)
+        batch_test_xs,batch_test_ys = dataIterator.test.next_batch(100)
+        mon_sess.run(train_op,feed_dict={y_:batch_xs})
+        cnt+=1
+        if cnt % 100 ==0:
+            print ("the loss is")
+            tloss = mon_sess.run(loss,feed_dict={y_:batch_test_xs})
+            summary = mon_sess.run(merged_summary,feed_dict={y_:batch_test_xs})
+            training_summary.add_summary(summary,cnt)
+            print ("loss %d , in training loop %g" % (tloss,cnt))
+
+def run_my_model_sess(dataIterator,training_handle,sess,training_summary):
+    training_ROUND = 1000000
+    cnt = training_ROUND
+
+    [train_op,y_,loss,graph_varialbe_init,merged_summary] = training_handle
+
+    ## need to initilize in sess
+    sess.run(graph_varialbe_init)
+
+    for i in range(training_ROUND):
+        batch_xs, batch_ys = dataIterator.train.next_batch(50)
+        batch_test_xs,batch_test_ys = dataIterator.test.next_batch(100)
+        ## need to specify Session instance explicitly
+        train_op.run(feed_dict={y_:batch_xs},session = sess)
+
+        if i % 100 == 0 and SUMMARY:
+            cost = loss.eval(feed_dict={y_:batch_test_xs},session = sess)
+            summary = sess.run(merged_summary,feed_dict={y_:batch_test_xs})
+            training_summary.add_summary(summary,i)
+            print ("step %d, training cost is: %g" % (i,cost))
 '''
 main:   compose all necessary functions together!
 - data input
@@ -219,7 +263,7 @@ def train_boday():
     ## define the Computational Graph
     mg = tf.Graph()
 
-## With in this graph context.
+## With in this graph context define grap composition and session.
 ## ALL learning logic is defined here !!!
     with mg.as_default():
         (
@@ -239,7 +283,8 @@ def train_boday():
             server = def_Dis_Server()
             sess = def_Mon_Session(server)
         else:
-            sess = def_Local_Session()
+            sess = def_Mon_Session()
+##            sess = def_Local_Session()
 
         ## define summary log directory.
         training_summary= tf.summary.FileWriter(FLAGS.log_dir + '/train')
@@ -258,54 +303,14 @@ def train_boday():
     elif FLAGS.distribute == 'distribute' and FLAGS.job_name == 'worker':
         run_my_model_mon(mnist,training_handles,sess,training_summary)
     else:
-        run_my_model_sess(mnist,training_handles,sess,training_summary)
+        run_my_model_mon(mnist,training_handles,sess,training_summary)
 
     print ("training finished")
     ## release all resources
     sess.close()
     training_summary.close()
 
-def run_my_model_mon(dataIterator,training_handles,mon_sess,training_summary):
-    [train_op,y_,loss,graph_varialbe_init,merged_summary] = training_handle
 
-    with mon_sess.as_default():
-        while not mon_sess.should_stop():
-            print ("start in training loop")
-# Run a training step asynchronously.
-# See <a href="../api_docs/python/tf/train/SyncReplicasOptimizer"><code>tf.train.SyncReplicasOptimizer</code></a> for additional details on how to
-# perform *synchronous* training.
-# mon_sess.run handles AbortedError in case of preempted PS.
-            batch_xs, batch_ys = dataIterator.train.next_batch(50)
-            batch_test_xs,batch_test_ys = dataIterator.test.next_batch(100)
-            mon_sess.run(train_op,feed_dict={y_:batch_xs})
-            cnt+=1
-            if cnt % 10 ==0:
-                print ("the loss is")
-                tloss = mon_sess.run(loss,feed_dict={y_:batch_test_xs})
-                summary = mon_sess.run(merged_summary,feed_dict={y_:batch_test_xs})
-                training_summary.add_summary(summary,cnt)
-                print ("loss %d , in training loop %g" % (tloss,cnt))
-
-def run_my_model_sess(dataIterator,training_handle,sess,training_summary):
-    training_ROUND = 1000000
-    cnt = training_ROUND
-
-    [train_op,y_,loss,graph_varialbe_init,merged_summary] = training_handle
-
-    ## need to initilize in sess
-    sess.run(graph_varialbe_init)
-
-    for i in range(training_ROUND):
-        batch_xs, batch_ys = dataIterator.train.next_batch(50)
-        batch_test_xs,batch_test_ys = dataIterator.test.next_batch(100)
-        ## need to specify Session instance explicitly
-        train_op.run(feed_dict={y_:batch_xs},session = sess)
-
-        if i % 100 == 0 and SUMMARY:
-            cost = loss.eval(feed_dict={y_:batch_test_xs},session = sess)
-            summary = sess.run(merged_summary,feed_dict={y_:batch_test_xs})
-            training_summary.add_summary(summary,i)
-            print ("step %d, training cost is: %g" % (i,cost))
 
 
 
