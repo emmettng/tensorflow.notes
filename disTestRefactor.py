@@ -144,6 +144,8 @@ def def_Dis_Session():
     server = tf.train.Server(cluster,
                            job_name=FLAGS.job_name,
                            task_index=FLAGS.task_index)
+##    this order cannot be changed !!!! be aware ! what a crap api design !!!
+##  Define the Session
     global_step = tf.contrib.framework.get_or_create_global_step()
 
     sess = tf.train.MonitoredTrainingSession(master=server.target,
@@ -253,16 +255,27 @@ def train_boday():
         training_ROUND = 1000000
         cnt = training_ROUND
 
-        for i in range(training_ROUND):
-            batch_xs, batch_ys = mnist.train.next_batch(50)
-            ## need to specify Session instance explicitly
-            training_handle.run(feed_dict={y_:batch_xs},session = sess)
-
-            if i % 100 == 0 and SUMMARY:
-                cost = loss.eval(feed_dict={y_:batch_xs},session = sess)
-                summary = sess.run(merged_summary,feed_dict={y_:batch_xs})
-                training_summary.add_summary(summary,i)
-                print ("step %d, training cost is: %g" % (i,cost))
+        with sess.as_default():
+            while not sess.should_stop():
+                batch_xs, batch_ys = mnist.train.next_batch(50)
+                mon_sess.run(train_op,feed_dict={y_:batch_xs})
+                cnt+=1
+                if cnt % 10 ==0:
+                    print ("the loss is")
+                    tloss = sess.run(loss,feed_dict={y_:batch_xs})
+                    summary = sess.run(merged_summary,feed_dict={y_:batch_xs})
+                    training_summary.add_summary(summary,cnt)
+                    print ("loss %d , in training loop %g" % (tloss,cnt))
+##        for i in range(training_ROUND):
+##            batch_xs, batch_ys = mnist.train.next_batch(50)
+##            ## need to specify Session instance explicitly
+##            training_handle.run(feed_dict={y_:batch_xs},session = sess)
+##
+##            if i % 100 == 0 and SUMMARY:
+##                cost = loss.eval(feed_dict={y_:batch_xs},session = sess)
+##                summary = sess.run(merged_summary,feed_dict={y_:batch_xs})
+##                training_summary.add_summary(summary,i)
+##                print ("step %d, training cost is: %g" % (i,cost))
 
     ## release all resources
     sess.close()
