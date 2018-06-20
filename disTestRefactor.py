@@ -219,7 +219,8 @@ def train_boday():
     ## define the Computational Graph
     mg = tf.Graph()
 
-##context manager is key here !!!
+## With in this graph context.
+## ALL learning logic is defined here !!!
     with mg.as_default():
         (
             clist,
@@ -240,22 +241,21 @@ def train_boday():
         else:
             sess = def_Local_Session()
 
-        if FLAGS.distribute == 'distribute' and FLAGS.job_name == 'ps':
-            server.join()
-
-        ## The following loop must be in the mg.as_default scope so globa_variables will contains all variables.
-        for v in tf.global_variables():
-            print (v)
-            print (v.name)
-
         ## define summary log directory.
         training_summary= tf.summary.FileWriter(FLAGS.log_dir + '/train')
 ##      testing_summary = tf.summary.FileWriter(FLAGS.log_dir + '/test')
 
         training_summary.add_graph(mg)
+        ## The following loop must be in the mg.as_default scope so globa_variables will contains all variables.
+        for v in tf.global_variables():
+            print (v)
+            print (v.name)
 
     training_handles = [train_op,y_,loss,graph_varialbe_init,merged_summary]
-    if FLAGS.distribute == 'distribute':
+
+    if FLAGS.distribute == 'distribute' and FLAGS.job_name == 'ps':
+            server.join()
+    elif FLAGS.distribute == 'distribute' and FLAGS.job_name == 'worker':
         run_my_model_mon(mnist,training_handles,sess,training_summary)
     else:
         run_my_model_sess(mnist,training_handles,sess,training_summary)

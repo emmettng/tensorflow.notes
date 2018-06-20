@@ -166,19 +166,20 @@ def main(_):
     with tf.device(tf.train.replica_device_setter(
         worker_device="/job:worker/task:%d" % FLAGS.task_index,
         cluster=cluster)):
-      mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
-      # Build model...
-      y_ = tf.placeholder(dtype=tf.float32, shape = [None,784])
 
-      ## compose Graph
-      y_Hypo = def_GRAPH(y_)
+        mnist = input_data.read_data_sets(FLAGS.data_dir, one_hot=True)
+        # Build model...
+        y_ = tf.placeholder(dtype=tf.float32, shape = [None,784])
 
-      ## get loss definition
-      loss = def_LOSS(y_,y_Hypo)
+        ## compose Graph
+        y_Hypo = def_GRAPH(y_)
 
-      global_step = tf.contrib.framework.get_or_create_global_step()
+        ## get loss definition
+        loss = def_LOSS(y_,y_Hypo)
 
-      train_op = tf.train.AdagradOptimizer(0.01).minimize(
+        global_step = tf.contrib.framework.get_or_create_global_step()
+
+        train_op = tf.train.AdagradOptimizer(0.01).minimize(
           loss, global_step=global_step)
 
     merged_summary = tf.summary.merge_all()
@@ -248,7 +249,7 @@ if __name__ == "__main__":
       type=str,
       default = './event_log',
       help='Summaries log directory')
-  
+
   parser.add_argument(
       '--data_dir',
       type=str,
