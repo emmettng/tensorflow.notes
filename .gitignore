@@ -2,3 +2,4 @@
 *.pkl
 *.csv
 *event*
+.idea*

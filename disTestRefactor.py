@@ -130,6 +130,47 @@ def def_ACCURACY(y_Hypo, y_):
             tf.summary.scalar('accuracy',accuracy)
     return accuracy
 
+def def_ComposeGraph():
+
+    ### define detive there
+    if FLAGS.distribute == 'distribute':
+        ps_hosts = FLAGS.ps_hosts.split(',')
+        worker_hosts = FLAGS.worker_hosts.split(',')
+        cluster = tf.train.ClusterSpec({"ps": ps_hosts, "worker": worker_hosts})
+        device_setter = tf.train.replica_device_setter(
+            worker_device="/job:worker/task:%d" % FLAGS.task_id,
+            ps_device="/job:ps",
+            cluster=cluster)
+        ## global_step is also a tensor, it is being used together with MonitoredTrainingSession
+        global_step = tf.contrib.framework.get_or_create_global_step()
+    else:
+        device_setter = "/cpu:0"
+
+    with tf.device(device_setter):
+        ## y_, y_Hypo, loss, merged_summary are four tensors.
+        y_ = tf.placeholder(dtype=tf.float32, shape = [None,784])
+        ## Define Graph
+        y_Hypo = def_GRAPH(y_)
+        ## get loss definition
+        loss = def_LOSS(y_,y_Hypo)
+        ## define optimizer
+        optimizer = tf.train.AdamOptimizer(1e-4)
+
+        ## define train_operation
+        if FLAGS.distribute == 'distribute':
+            training_op= optimizer.minimize(loss,global_step = global_step)
+        else:
+            training_op= optimizer.minimize(loss)
+        ## accuracy definition
+##           accuracy = def_ACCURACY(y_Hypo=y_Hypo, y_=y_)
+        ## regiester all variable for initilization in this graph
+        graph_varialbe_init= tf.global_variables_initializer()
+
+        ## merge all summary tensor in this graph.
+        merged_summary = tf.summary.merge_all()
+
+    return ([],y_,y_Hypo,loss,training_op,graph_varialbe_init,merged_summary)
+    
 def def_Dis_Server():
     ps_hosts = FLAGS.ps_hosts.split(",")
     worker_hosts = FLAGS.worker_hosts.split(",")
@@ -163,44 +204,7 @@ def def_Local_Session():
     sess = tf.Session()
     return sess
 
-def def_ComposeGraph():
-    if FLAGS.distribute == 'distribute':
-        ps_hosts = FLAGS.ps_hosts.split(',')
-        worker_hosts = FLAGS.worker_hosts.split(',')
-        cluster = tf.train.ClusterSpec({"ps": ps_hosts, "worker": worker_hosts})
-        device_setter = tf.train.replica_device_setter(
-            worker_device="/job:worker/task:%d" % FLAGS.task_id,
-            ps_device="/job:ps",
-            cluster=cluster)
-        ## global_step is also a tensor
-        global_step = tf.contrib.framework.get_or_create_global_step()
-    else:
-        device_setter = "/cpu:0"
 
-    with tf.device(device_setter):
-        ## y_, y_Hypo, loss, merged_summary are four tensors.
-        y_ = tf.placeholder(dtype=tf.float32, shape = [None,784])
-        ## Define Graph
-        y_Hypo = def_GRAPH(y_)
-        ## get loss definition
-        loss = def_LOSS(y_,y_Hypo)
-        ## define optimizer
-        optimizer = tf.train.AdamOptimizer(1e-4)
-
-        ## define train_operation
-        if FLAGS.distribute == 'distribute':
-            training_op= optimizer.minimize(loss,global_step = global_step)
-        else:
-            training_op= optimizer.minimize(loss)
-        ## accuracy definition
-##           accuracy = def_ACCURACY(y_Hypo=y_Hypo, y_=y_)
-        ## regiester all variable for initilization in this graph
-        graph_varialbe_init= tf.global_variables_initializer()
-
-        ## merge all summary tensor in this graph.
-        merged_summary = tf.summary.merge_all()
-
-    return ([],y_,y_Hypo,loss,training_op,graph_varialbe_init,merged_summary)
 
 def run_my_model_mon(dataIterator,training_handle,mon_sess,training_summary):
     [train_op,y_,loss,graph_varialbe_init,merged_summary] = training_handle
@@ -308,7 +312,7 @@ def train_boday():
 ##    elif FLAGS.distribute == 'distribute' and FLAGS.job_name == 'worker':
 ##        run_my_model_mon(mnist,training_handles,sess,training_summary)
 ##    else:
-##        run_my_model_mon(mnist,training_handles,sess,training_summary)
+#   #        run_my_model_mon(mnist,training_handles,sess,training_summary)
 
     print ("training finished")
     ## release all resources
